@@ -700,8 +700,17 @@ async def init_db():
             banned_by INTEGER,
             reason TEXT DEFAULT "Запрет на создание франшиз"
         )
-    ''')    
-    
+    ''')
+
+    await conn.execute('''
+        CREATE TABLE IF NOT EXISTS banned_users (
+            user_id INTEGER PRIMARY KEY,
+            banned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            banned_by INTEGER,
+            reason TEXT DEFAULT "Глобальный бан"
+        )
+    ''')
+
     await conn.execute('''
         CREATE TABLE IF NOT EXISTS pc (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -994,6 +1003,13 @@ async def execute_update(query, params=()):
     await conn.execute(query, params)
     await conn.commit()
 
+async def check_ban(user_id: int) -> tuple[bool, str]:
+    """Проверка на глобальный бан. Возвращает (забанен?, причина)"""
+    banned = await execute_query_one('SELECT reason FROM banned_users WHERE user_id = ?', (user_id,))
+    if banned:
+        return True, banned[0]
+    return False, ""
+
 # ============== СИСТЕМА ДОСТИЖЕНИЙ И БОКСОВ ==============
 
 async def initialize_achievements():
@@ -1060,10 +1076,51 @@ async def ensure_user_achievement_stats(user_id: int):
     """Убедиться, что у пользователя есть запись статистики"""
     try:
         conn = await Database.get_connection()
-        cursor = await conn.execute('SELECT user_id FROM user_achievement_stats WHERE user_id = ?', (user_id,))
-        if not await cursor.fetchone():
-            await conn.execute('INSERT INTO user_achievement_stats (user_id) VALUES (?)', (user_id,))
+
+        # Получаем текущий expansion_level и reputation из stats
+        cursor = await conn.execute('SELECT expansion_level, reputation FROM stats WHERE userid = ?', (user_id,))
+        stats = await cursor.fetchone()
+        expansion_level = stats[0] if stats and stats[0] else 0
+        reputation_level = stats[1] if stats and stats[1] else 1
+
+        # Проверяем есть ли запись в user_achievement_stats
+        cursor = await conn.execute('SELECT max_expansion_level, max_reputation_level FROM user_achievement_stats WHERE user_id = ?', (user_id,))
+        ach_stats = await cursor.fetchone()
+
+        if not ach_stats:
+            # Создаем новую запись с текущими значениями
+            await conn.execute('''
+                INSERT INTO user_achievement_stats (user_id, max_expansion_level, max_reputation_level)
+                VALUES (?, ?, ?)
+            ''', (user_id, expansion_level, reputation_level))
             await conn.commit()
+
+            # Проверяем достижения если есть прогресс
+            if expansion_level > 0:
+                await check_achievements(user_id, 'expansion')
+            if reputation_level > 1:
+                await check_achievements(user_id, 'reputation')
+        else:
+            # Синхронизируем значения если они отличаются (для старых пользователей)
+            current_max_expansion = ach_stats[0] if ach_stats[0] else 0
+            current_max_reputation = ach_stats[1] if ach_stats[1] else 1
+
+            need_update = False
+            if expansion_level > current_max_expansion:
+                await conn.execute('UPDATE user_achievement_stats SET max_expansion_level = ? WHERE user_id = ?', (expansion_level, user_id))
+                need_update = True
+            if reputation_level > current_max_reputation:
+                await conn.execute('UPDATE user_achievement_stats SET max_reputation_level = ? WHERE user_id = ?', (reputation_level, user_id))
+                need_update = True
+
+            if need_update:
+                await conn.commit()
+                # Проверяем достижения заново
+                if expansion_level > current_max_expansion:
+                    await check_achievements(user_id, 'expansion')
+                if reputation_level > current_max_reputation:
+                    await check_achievements(user_id, 'reputation')
+
     except Exception as e:
         logging.error(f"Error ensuring user achievement stats: {e}")
 
@@ -1152,11 +1209,15 @@ async def check_achievements(user_id: int, category: str):
             VALUES (?, ?, 0)
             ''', (user_id, ach_id))
 
-            # Обновляем прогресс
+            # Обновляем прогресс (не сбрасываем completed если уже выполнено)
             completed = 1 if current_value >= target else 0
             await conn.execute('''
             UPDATE user_achievements
-            SET current_value = ?, completed = ?
+            SET current_value = ?,
+                completed = CASE
+                    WHEN completed = 1 THEN 1
+                    ELSE ?
+                END
             WHERE user_id = ? AND achievement_id = ?
             ''', (current_value, completed, user_id, ach_id))
 
@@ -1167,6 +1228,9 @@ async def check_achievements(user_id: int, category: str):
 async def get_user_achievements(user_id: int, category: str):
     """Получить достижения пользователя по категории"""
     try:
+        # Убеждаемся что статистика пользователя инициализирована (миграция для старых пользователей)
+        await ensure_user_achievement_stats(user_id)
+
         conn = await Database.get_connection()
         cursor = await conn.execute('''
         SELECT a.id, a.name, a.description, a.target_value,
@@ -1507,6 +1571,52 @@ class Rename(StatesGroup):
 # ===== BOT INITIALIZATION =====
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
+
+# ===== MIDDLEWARE ДЛЯ ПРОВЕРКИ БАНА =====
+async def check_ban_middleware_func(user_id: int) -> tuple[bool, str]:
+    """Проверка бана для middleware"""
+    try:
+        banned = await execute_query_one('SELECT reason FROM banned_users WHERE user_id = ?', (user_id,))
+        if banned:
+            return True, banned[0]
+        return False, ""
+    except:
+        return False, ""
+
+@dp.update.outer_middleware()
+async def ban_check_middleware(handler, event, data):
+    """Middleware для проверки глобального бана пользователя"""
+    try:
+        # Получаем user_id из event
+        user_id = None
+        if hasattr(event, 'from_user') and event.from_user:
+            user_id = event.from_user.id
+        elif hasattr(event, 'message') and event.message and hasattr(event.message, 'from_user'):
+            user_id = event.message.from_user.id
+
+        # Если нашли user_id, проверяем бан (кроме админов)
+        if user_id and user_id not in ADMIN:
+            is_banned, reason = await check_ban_middleware_func(user_id)
+            if is_banned:
+                # Пытаемся отправить сообщение о бане
+                try:
+                    if hasattr(event, 'answer'):
+                        await event.answer(
+                            f'🚫 Вы заблокированы\nПричина: {reason}\n\nВы не можете использовать бота.',
+                            show_alert=True
+                        )
+                    elif hasattr(event, 'message'):
+                        await event.message.answer(
+                            f'🚫 Вы заблокированы\nПричина: {reason}\n\nВы не можете использовать бота.'
+                        )
+                except:
+                    pass
+                return  # Прерываем обработку
+    except:
+        pass
+
+    # Если не забанен, продолжаем обработку
+    return await handler(event, data)
 
 # Кулдаун для покупок ПК (1.5 секунды между покупками)
 buy_cooldowns = {}
@@ -1923,7 +2033,10 @@ async def do_expansion(user_id: int) -> bool:
             'UPDATE stats SET expansion_level = ? WHERE userid = ?',
             (new_expansion_level, user_id)
         )
-        
+
+        # Обновляем достижения за экспансию
+        await update_user_achievement_stat(user_id, 'expansion', new_expansion_level)
+
         # Сбрасываем прогресс пользователя (вайп): баланс 5000$, комната 1, компьютеры 0
         # Сбрасываем улучшения, налоги, доход
         await execute_update(
@@ -5912,6 +6025,111 @@ async def cmd_test_auto_promo(message: Message):
         logger.error(f"Error in test_auto_promo: {e}")
         await message.answer(f'❌ Ошибка: {str(e)}')
 
+@cmd_admin_router.message(Command('ban'))
+async def cmd_ban(message: Message):
+    """Глобальный бан пользователя (только для админов)"""
+    if message.from_user.id not in ADMIN:
+        await message.answer('❌ Недостаточно прав')
+        return
+
+    try:
+        args = message.text.split()
+        if len(args) < 2:
+            await message.answer('⚠️ Используйте: /ban (ID пользователя) [причина]')
+            return
+
+        user_id = int(args[1])
+        reason = ' '.join(args[2:]) if len(args) > 2 else "Глобальный бан"
+
+        if user_id in ADMIN:
+            await message.answer('❌ Нельзя забанить администратора')
+            return
+
+        # Проверяем, не забанен ли уже
+        banned = await execute_query_one('SELECT user_id FROM banned_users WHERE user_id = ?', (user_id,))
+        if banned:
+            await message.answer('⚠️ Пользователь уже забанен')
+            return
+
+        # Баним пользователя
+        await execute_update(
+            'INSERT INTO banned_users (user_id, banned_by, reason) VALUES (?, ?, ?)',
+            (user_id, message.from_user.id, reason)
+        )
+
+        # Обнуляем все данные пользователя
+        await execute_update('DELETE FROM stats WHERE userid = ?', (user_id,))
+        await execute_update('DELETE FROM pc WHERE userid = ?', (user_id,))
+        await execute_update('DELETE FROM orders WHERE user_id = ?', (user_id,))
+        await execute_update('DELETE FROM user_work_stats WHERE user_id = ?', (user_id,))
+        await execute_update('DELETE FROM user_achievement_stats WHERE user_id = ?', (user_id,))
+
+        await message.answer(
+            f'✅ Пользователь {user_id} забанен\n'
+            f'Причина: {reason}\n'
+            f'Все данные удалены'
+        )
+
+        # Уведомляем пользователя
+        try:
+            await bot.send_message(
+                user_id,
+                f'🚫 Вы заблокированы\n'
+                f'Причина: {reason}\n\n'
+                f'Все ваши данные удалены. Вы не можете использовать бота.'
+            )
+        except:
+            pass
+
+    except ValueError:
+        await message.answer('❌ ID должен быть числом')
+    except Exception as e:
+        logger.error(f"Error in cmd_ban: {e}")
+        await message.answer(f'❌ Ошибка: {str(e)}')
+
+@cmd_admin_router.message(Command('unban'))
+async def cmd_unban(message: Message):
+    """Разбан пользователя (только для админов)"""
+    if message.from_user.id not in ADMIN:
+        await message.answer('❌ Недостаточно прав')
+        return
+
+    try:
+        args = message.text.split()
+        if len(args) < 2:
+            await message.answer('⚠️ Используйте: /unban (ID пользователя)')
+            return
+
+        user_id = int(args[1])
+
+        # Проверяем, забанен ли пользователь
+        banned = await execute_query_one('SELECT user_id, reason FROM banned_users WHERE user_id = ?', (user_id,))
+        if not banned:
+            await message.answer('⚠️ Пользователь не забанен')
+            return
+
+        # Разбаниваем
+        await execute_update('DELETE FROM banned_users WHERE user_id = ?', (user_id,))
+
+        await message.answer(f'✅ Пользователь {user_id} разбанен')
+
+        # Уведомляем пользователя
+        try:
+            await bot.send_message(
+                user_id,
+                '✅ Вы разблокированы!\n'
+                'Теперь вы можете снова использовать бота.\n'
+                'Начните с /start'
+            )
+        except:
+            pass
+
+    except ValueError:
+        await message.answer('❌ ID должен быть числом')
+    except Exception as e:
+        logger.error(f"Error in cmd_unban: {e}")
+        await message.answer(f'❌ Ошибка: {str(e)}')
+
 # ===== NETWORK CALLBACK HANDLERS =====
 @cb_network_router.callback_query(F.data.startswith('network_members'))
 async def cb_network_members(callback: CallbackQuery):
@@ -8656,15 +8874,18 @@ async def process_auto_boosters():
                             (reward, user_id)
                         )
                         await execute_update('''
-                            UPDATE user_work_stats 
+                            UPDATE user_work_stats
                             SET exp = exp + 1, last_work = ?, total_earned = total_earned + ?
                             WHERE user_id = ?
                         ''', (datetime.datetime.now().isoformat(), reward, user_id))
-                        
+
+                        # Обновляем достижения за работу
+                        await update_user_achievement_stat(user_id, 'work', 1)
+
                         # Добавляем репутацию за автоматическую работу
                         rep_points = max_job['id']
                         await add_reputation(user_id, rep_points, "auto_work")
-                        
+
                         logger.info(f"Auto-work completed for user {user_id}: {max_job['name']} (+{reward}$)")
         
     except Exception as e:
