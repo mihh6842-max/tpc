@@ -17,11 +17,15 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 
 TOKEN = "7574504052:AAGuScWo3tKbj_NvT7B28LT-wCQXUhw75vE"
-PCCLUB = -1003246180665 
+PCCLUB = -1003246180665
 ADMIN = [5929120983, 963551489, 8315604670, 7453830377, 7338817463]
 PAYMENT_TOKEN = "goida"
 
-DB_FILE = "2pcclub.db"
+# Создаем папку для БД
+import os
+os.makedirs('data', exist_ok=True)
+
+DB_FILE = "data/2pcclub.db"
 
 prices = [
     [1, 5, 3600],
