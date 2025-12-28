@@ -1081,11 +1081,15 @@ async def ensure_user_achievement_stats(user_id: int):
     try:
         conn = await Database.get_connection()
 
-        # Получаем текущий expansion_level и reputation из stats
-        cursor = await conn.execute('SELECT expansion_level, reputation FROM stats WHERE userid = ?', (user_id,))
+        # Получаем текущий expansion_level из stats
+        cursor = await conn.execute('SELECT expansion_level FROM stats WHERE userid = ?', (user_id,))
         stats = await cursor.fetchone()
         expansion_level = stats[0] if stats and stats[0] else 0
-        reputation_level = stats[1] if stats and stats[1] else 1
+
+        # Получаем reputation_level из user_reputation
+        cursor = await conn.execute('SELECT reputation_level FROM user_reputation WHERE user_id = ?', (user_id,))
+        rep_stats = await cursor.fetchone()
+        reputation_level = rep_stats[0] if rep_stats and rep_stats[0] else 1
 
         # Проверяем есть ли запись в user_achievement_stats
         cursor = await conn.execute('SELECT max_expansion_level, max_reputation_level FROM user_achievement_stats WHERE user_id = ?', (user_id,))
@@ -8885,6 +8889,9 @@ async def process_auto_boosters():
 
                         # Обновляем достижения за работу
                         await update_user_achievement_stat(user_id, 'work', 1)
+
+                        # Обновляем батл пасс за работу
+                        await update_bp_progress(user_id, 'work', 1)
 
                         # Добавляем репутацию за автоматическую работу
                         rep_points = max_job['id']
