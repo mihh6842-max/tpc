@@ -3302,6 +3302,81 @@ async def cmd_test_box(message: Message):
         logger.error(f"Error in test_box: {e}")
         await message.answer('❌ Ошибка при открытии бокса')
 
+@cmd_admin_router.message(Command('test_box_multi'))
+async def cmd_test_box_multi(message: Message):
+    """Быстро открыть несколько боксов (админ)"""
+    if message.from_user.id not in ADMIN:
+        await message.answer('❌ Недостаточно прав')
+        return
+
+    text_parts = message.text.split(' ')
+
+    if len(text_parts) != 3:
+        await message.answer(
+            '⚠️ Используйте: /test_box_multi (тип_бокса) (количество)\n\n'
+            '*Пример:*\n'
+            '`/test_box_multi business_box 10`',
+            parse_mode='Markdown'
+        )
+        return
+
+    box_type = text_parts[1].lower()
+
+    if not text_parts[2].isdigit():
+        await message.answer('❌ Количество должно быть числом')
+        return
+
+    count = int(text_parts[2])
+
+    if count <= 0 or count > 100:
+        await message.answer('❌ Количество должно быть от 1 до 100')
+        return
+
+    # Проверка типа бокса
+    valid_boxes = ['starter_pack', 'gamer_case', 'business_box', 'champion_chest', 'pro_gear', 'legend_vault', 'vip_mystery']
+    if box_type not in valid_boxes:
+        await message.answer(f'❌ Неверный тип бокса')
+        return
+
+    try:
+        user_id = message.from_user.id
+        await ensure_user_boxes(user_id)
+
+        # Добавляем боксы
+        await execute_update(
+            f'UPDATE user_boxes SET {box_type} = {box_type} + ? WHERE user_id = ?',
+            (count, user_id)
+        )
+
+        # Открываем все
+        results = []
+        for i in range(count):
+            reward = await open_box(user_id, box_type)
+            if reward:
+                reward_type, reward_value, _ = reward
+                results.append(f"{i+1}. {reward_type}: {reward_value}")
+
+        # Показываем результаты
+        box_names = {
+            'starter_pack': '📦 STARTER PACK',
+            'gamer_case': '🎮 GAMER CASE',
+            'business_box': '💼 BUSINESS BOX',
+            'champion_chest': '🏆 CHAMPION CHEST',
+            'pro_gear': '⚡ PRO GEAR',
+            'legend_vault': '🔥 LEGEND VAULT',
+            'vip_mystery': '💎 VIP MYSTERY'
+        }
+
+        result_text = f"🎉 Открыто {count}x {box_names.get(box_type, box_type)}:\n\n"
+        result_text += "\n".join(results)
+
+        await message.answer(result_text)
+        logger.info(f"Admin {message.from_user.id} tested {count}x {box_type}")
+
+    except Exception as e:
+        logger.error(f"Error in test_box_multi: {e}")
+        await message.answer('❌ Ошибка при открытии боксов')
+
 @cmd_admin_router.message(Command('complete_achievement'))
 async def cmd_complete_achievement(message: Message):
     """Выполнить достижение для пользователя"""
