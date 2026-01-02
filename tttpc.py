@@ -2667,6 +2667,98 @@ async def cmd_give_all_premium(message: Message):
         await message.answer('❌ Ошибка при выдаче премиума')
 
 
+
+@cmd_admin_router.message(Command('give_boxes_all'))
+async def cmd_give_boxes_all(message: Message):
+    """Выдать боксы всем игрокам"""
+    if message.from_user.id not in ADMIN:
+        await message.answer('❌ Недостаточно прав')
+        return
+
+    text_parts = message.text.split(' ')
+
+    if len(text_parts) != 3:
+        await message.answer(
+            '⚠️ Используйте: /give_boxes_all (тип_бокса) (количество)\n\n'
+            'Типы боксов:\n'
+            '• starter_pack\n'
+            '• gamer_case\n'
+            '• business_box\n'
+            '• champion_chest\n'
+            '• pro_gear\n'
+            '• legend_vault\n'
+            '• vip_mystery'
+        )
+        return
+
+    box_type = text_parts[1]
+
+    if not text_parts[2].isdigit():
+        await message.answer('❌ Количество должно быть числом')
+        return
+
+    quantity = int(text_parts[2])
+
+    if quantity <= 0:
+        await message.answer('❌ Количество должно быть больше 0')
+        return
+
+    valid_types = ['starter_pack', 'gamer_case', 'business_box', 'champion_chest',
+                   'pro_gear', 'legend_vault', 'vip_mystery']
+
+    if box_type not in valid_types:
+        await message.answer(f'❌ Неверный тип бокса. Используйте один из: {", ".join(valid_types)}')
+        return
+
+    try:
+        conn = await Database.get_connection()
+
+        # Получаем всех пользователей
+        cursor = await conn.execute('SELECT userid FROM stats')
+        users = await cursor.fetchall()
+
+        if not users:
+            await message.answer('❌ В базе нет пользователей')
+            return
+
+        # Выдаем боксы всем
+        success_count = 0
+        for user_row in users:
+            user_id = user_row[0]
+            try:
+                await ensure_user_boxes(user_id)
+                await conn.execute(f"""
+                UPDATE user_boxes SET {box_type} = {box_type} + ?
+                WHERE user_id = ?
+                """, (quantity, user_id))
+                success_count += 1
+            except Exception as e:
+                logging.error(f"Error giving boxes to user {user_id}: {e}")
+                continue
+
+        await conn.commit()
+
+        box_names = {
+            'starter_pack': '📦 STARTER PACK',
+            'gamer_case': '🎮 GAMER\'S CASE',
+            'business_box': '💼 BUSINESS BOX',
+            'champion_chest': '🏆 CHAMPION CHEST',
+            'pro_gear': '🧳 PRO GEAR',
+            'legend_vault': '👑 LEGEND\'S VAULT',
+            'vip_mystery': '🌟 VIP MYSTERY BOX'
+        }
+
+        await message.answer(
+            f'✅ Успешно выдано:\n'
+            f'{box_names[box_type]} x{quantity}\n'
+            f'Игроков: {success_count}/{len(users)}'
+        )
+
+    except Exception as e:
+        logging.error(f"Error in give_boxes_all: {e}")
+        await message.answer(f'❌ Ошибка: {e}')
+
+
 @cmd_admin_router.message(Command('give_all_boost'))
 async def cmd_give_all_boost(message: Message):
     if message.from_user.id not in ADMIN:
