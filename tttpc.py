@@ -1747,6 +1747,14 @@ BUY_COOLDOWN = 1.5  # секунды
 box_cooldowns = {}
 BOX_COOLDOWN = 3.0  # секунды
 
+# Кулдаун для налогов (1 час)
+taxes_cooldowns = {}
+TAXES_COOLDOWN = 3600  # секунды
+
+# Кулдаун для уведомлений о налогах (1 час)
+taxes_notification_cooldowns = {}
+TAXES_NOTIFICATION_COOLDOWN = 3600  # секунды
+
 # ===== ROUTERS =====
 fsm_router = Router()
 callback_router = Router()
@@ -5498,12 +5506,26 @@ async def cmd_taxes(message: Message):
         
 @cmd_user_router.message(Command('pay_taxes'))
 async def cmd_pay_taxes(message: Message):
+    # Проверка кулдауна
+    import time
+    user_id = message.from_user.id
+    current_time = time.time()
+
+    if user_id in taxes_cooldowns:
+        time_passed = current_time - taxes_cooldowns[user_id]
+        if time_passed < TAXES_COOLDOWN:
+            remaining = TAXES_COOLDOWN - time_passed
+            hours = int(remaining // 3600)
+            minutes = int((remaining % 3600) // 60)
+            await message.answer(f"⏳ Подожди {hours}ч {minutes}м перед следующей оплатой налогов!")
+            return
+
     # Проверяем бустер автоматизации
     user_boosters = await execute_query_one(
         'SELECT auto_booster_end FROM stats WHERE userid = ?',
         (message.from_user.id,)
     )
-    
+
     if user_boosters and user_boosters[0]:
         auto_booster_end = safe_parse_datetime(user_boosters[0])
         if auto_booster_end and auto_booster_end > datetime.datetime.now():
@@ -5514,7 +5536,7 @@ async def cmd_pay_taxes(message: Message):
                 parse_mode='HTML'
             )
             return
-    
+
     user = await execute_query_one('SELECT name, taxes, bal FROM stats WHERE userid = ?', (message.from_user.id,))
     if not user:
         await message.answer('Сначала зарегистрируйтесь - /start')
@@ -5526,6 +5548,7 @@ async def cmd_pay_taxes(message: Message):
     user_data = user
     if user_data[2] >= user_data[1]:
         await execute_update('UPDATE stats SET bal = bal - ?, taxes = 0 WHERE userid = ?', (user_data[1], message.from_user.id))
+        taxes_cooldowns[user_id] = current_time  # Устанавливаем cooldown
         await message.answer(f'✅ Вы успешно уплатили все налоги. Общая сумма составила {format_number_short(user_data[1], True)}$')
     else:
         await message.answer('❌ У вас недостаточно средств')
@@ -9050,15 +9073,28 @@ async def calculate_income():
                              (float(new_balance), user_id))
             elif taxes_debt >= max_tax:
                 income_to_add = Decimal('0')
-                try:
-                    await bot.send_message(
-                        user_id, 
-                        f'⚠️ ВНИМАНИЕ! Ваш доход заморожен из-за налоговой задолженности!\n'
-                        f'Налоги: {format_number_short(taxes_debt, True)}$/{format_number_short(max_tax, True)}$ (МАКСИМУМ)\n'
-                        f'Оплатите налоги: /pay_taxes'
-                    )
-                except Exception:
-                    pass
+
+                # Проверяем cooldown уведомления (не чаще раза в час)
+                import time
+                current_time = time.time()
+                should_notify = True
+
+                if user_id in taxes_notification_cooldowns:
+                    time_passed = current_time - taxes_notification_cooldowns[user_id]
+                    if time_passed < TAXES_NOTIFICATION_COOLDOWN:
+                        should_notify = False
+
+                if should_notify:
+                    try:
+                        await bot.send_message(
+                            user_id,
+                            f'⚠️ ВНИМАНИЕ! Ваш доход заморожен из-за налоговой задолженности!\n'
+                            f'Налоги: {format_number_short(taxes_debt, True)}$/{format_number_short(max_tax, True)}$ (МАКСИМУМ)\n'
+                            f'Оплатите налоги: /pay_taxes'
+                        )
+                        taxes_notification_cooldowns[user_id] = current_time
+                    except Exception:
+                        pass
             else:
                 new_balance = current_balance + income_to_add
                 await execute_update('UPDATE stats SET bal = ? WHERE userid = ?', 
