@@ -1434,8 +1434,7 @@ async def open_box(user_id: int, box_type: str):
         box_config = {
             "starter_pack": {
                 "rewards": [
-                    ("⏱ Макс доход игрока", 90, lambda: random.randint(1, 6)),  # 90% шанс
-                    ("⏱ Заработок ПК", 9, lambda: random.randint(1, 6)),  # 9% шанс
+                    ("⏱ Заработок ПК", 99, lambda: random.randint(1, 6)),  # 99% шанс
                     ("🖥 ПК", 0.9, lambda: 1),  # 0.9% шанс
                     ("⚡ Премиум", 0.033, lambda: random.randint(1, 3)),  # 0.1%/3 шанс
                     ("🤖 Спонсор клуба", 0.033, lambda: random.randint(1, 3)),
@@ -1445,8 +1444,7 @@ async def open_box(user_id: int, box_type: str):
             },
             "gamer_case": {
                 "rewards": [
-                    ("⏱ Макс доход игрока", 80, lambda: random.randint(1, 12)),  # 80% шанс
-                    ("⏱ Заработок ПК", 19, lambda: random.randint(1, 12)),  # 19% шанс
+                    ("⏱ Заработок ПК", 99, lambda: random.randint(1, 12)),  # 99% шанс
                     ("🖥 Игровой ПК", 0.7, lambda: 1),  # 0.7% шанс
                     ("⚡ Премиум", 0.1, lambda: random.randint(1, 12)),  # 0.3%/3 шанс
                     ("🤖 Спонсор клуба", 0.1, lambda: random.randint(1, 12)),
@@ -1456,8 +1454,7 @@ async def open_box(user_id: int, box_type: str):
             },
             "business_box": {
                 "rewards": [
-                    ("⏱ Макс доход игрока", 70, lambda: random.randint(1, 24)),  # 70% шанс
-                    ("⏱ Заработок ПК", 25, lambda: random.randint(1, 24)),  # 25% шанс
+                    ("⏱ Заработок ПК", 95, lambda: random.randint(1, 24)),  # 95% шанс
                     ("🖥 Бизнес ПК", 4.5, lambda: 1),  # 4.5% шанс
                     ("⚡ Премиум", 0.167, lambda: random.randint(1, 24)),  # 0.5%/3 шанс
                     ("🤖 Спонсор клуба", 0.167, lambda: random.randint(1, 24)),
@@ -1467,8 +1464,7 @@ async def open_box(user_id: int, box_type: str):
             },
             "champion_chest": {
                 "rewards": [
-                    ("⏱ Макс доход игрока", 60, lambda: random.randint(1, 48)),  # 60% шанс
-                    ("⏱ Заработок ПК", 30, lambda: random.randint(1, 48)),  # 30% шанс
+                    ("⏱ Заработок ПК", 90, lambda: random.randint(1, 48)),  # 90% шанс
                     ("🖥 Элитный ПК", 9.3, lambda: 1),  # 9.3% шанс
                     ("⚡ Премиум", 0.233, lambda: random.randint(1, 48)),  # 0.7%/3 шанс
                     ("🤖 Спонсор клуба", 0.233, lambda: random.randint(1, 48)),
@@ -1478,8 +1474,7 @@ async def open_box(user_id: int, box_type: str):
             },
             "pro_gear": {
                 "rewards": [
-                    ("⏱ Макс доход игрока", 50, lambda: random.randint(1, 72)),  # 50% шанс
-                    ("⏱ Заработок ПК", 35, lambda: random.randint(1, 72)),  # 35% шанс
+                    ("⏱ Заработок ПК", 85, lambda: random.randint(1, 72)),  # 85% шанс
                     ("🖥 Про-комплект ПК", 14, lambda: 1),  # 14% шанс
                     ("⚡ Премиум", 0.333, lambda: random.randint(1, 72)),  # 1.0%/3 шанс
                     ("🤖 Спонсор клуба", 0.333, lambda: random.randint(1, 72)),
@@ -1489,8 +1484,7 @@ async def open_box(user_id: int, box_type: str):
             },
             "legend_vault": {
                 "rewards": [
-                    ("⏱ Макс доход игрока", 40, lambda: random.randint(1, 96)),  # 40% шанс
-                    ("⏱ Заработок ПК", 40, lambda: random.randint(1, 96)),  # 40% шанс
+                    ("⏱ Заработок ПК", 80, lambda: random.randint(1, 96)),  # 80% шанс
                     ("🖥 Легендарное оборудование", 18.5, lambda: 1),  # 18.5% шанс
                     ("⚡ Премиум", 0.5, lambda: random.randint(1, 96)),  # 1.5%/3 шанс
                     ("🤖 Спонсор клуба", 0.5, lambda: random.randint(1, 96)),
@@ -1500,8 +1494,7 @@ async def open_box(user_id: int, box_type: str):
             },
             "vip_mystery": {
                 "rewards": [
-                    ("⏱ Макс доход игрока", 30, lambda: random.randint(1, 128)),  # 30% шанс
-                    ("⏱ Заработок ПК", 50, lambda: random.randint(1, 128)),  # 50% шанс
+                    ("⏱ Заработок ПК", 80, lambda: random.randint(1, 128)),  # 80% шанс
                     ("🖥 VIP Ферма", 17, lambda: 1),  # 17% шанс
                     ("⚡ Премиум", 1.0, lambda: random.randint(1, 128)),  # 3%/3 шанс
                     ("🤖 Спонсор клуба", 1.0, lambda: random.randint(1, 128)),
@@ -3248,6 +3241,66 @@ async def cmd_give_all_boxes(message: Message):
     except Exception as e:
         logger.error(f"Error in give_all_boxes: {e}")
         await message.answer('❌ Ошибка при выдаче кейсов')
+
+@cmd_admin_router.message(Command('test_box'))
+async def cmd_test_box(message: Message):
+    """Быстро открыть бокс для теста (админ)"""
+    if message.from_user.id not in ADMIN:
+        await message.answer('❌ Недостаточно прав')
+        return
+
+    text_parts = message.text.split(' ')
+
+    if len(text_parts) != 2:
+        await message.answer(
+            '⚠️ Используйте: /test_box (тип_бокса)\n\n'
+            '*Типы боксов:*\n'
+            '• starter_pack\n'
+            '• gamer_case\n'
+            '• business_box\n'
+            '• champion_chest\n'
+            '• pro_gear\n'
+            '• legend_vault\n'
+            '• vip_mystery\n\n'
+            '*Пример:*\n'
+            '`/test_box vip_mystery`',
+            parse_mode='Markdown'
+        )
+        return
+
+    box_type = text_parts[1].lower()
+
+    # Проверка типа бокса
+    valid_boxes = ['starter_pack', 'gamer_case', 'business_box', 'champion_chest', 'pro_gear', 'legend_vault', 'vip_mystery']
+    if box_type not in valid_boxes:
+        await message.answer(f'❌ Неверный тип бокса. Доступные: {", ".join(valid_boxes)}')
+        return
+
+    try:
+        # Открываем бокс без проверки наличия (для теста)
+        user_id = message.from_user.id
+
+        # Временно добавляем бокс
+        await ensure_user_boxes(user_id)
+        await execute_update(
+            f'UPDATE user_boxes SET {box_type} = {box_type} + 1 WHERE user_id = ?',
+            (user_id,)
+        )
+
+        # Открываем
+        reward = await open_box(user_id, box_type)
+
+        if reward:
+            reward_type, reward_value, box_name = reward
+            await animate_box_opening(message, box_name, reward_type, reward_value)
+        else:
+            await message.answer("❌ Ошибка открытия бокса")
+
+        logger.info(f"Admin {message.from_user.id} tested box {box_type}")
+
+    except Exception as e:
+        logger.error(f"Error in test_box: {e}")
+        await message.answer('❌ Ошибка при открытии бокса')
 
 @cmd_admin_router.message(Command('complete_achievement'))
 async def cmd_complete_achievement(message: Message):
@@ -10620,6 +10673,10 @@ async def main():
     # Инициализируем базу данных
     await init_db()
     print("Database initialized successfully")
+
+    # Обновляем схему базы данных
+    await update_database_schema()
+    print("Database schema updated")
 
     # Инициализируем достижения
     await initialize_achievements()
