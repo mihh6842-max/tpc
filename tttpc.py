@@ -872,9 +872,28 @@ async def init_db():
             total_buy_count INTEGER DEFAULT 0,
             total_sell_count INTEGER DEFAULT 0,
             max_expansion_level INTEGER DEFAULT 0,
-            max_reputation_level INTEGER DEFAULT 0
+            max_reputation_level INTEGER DEFAULT 0,
+            starter_pack_opened INTEGER DEFAULT 0,
+            gamer_case_opened INTEGER DEFAULT 0,
+            business_box_opened INTEGER DEFAULT 0,
+            champion_chest_opened INTEGER DEFAULT 0,
+            pro_gear_opened INTEGER DEFAULT 0,
+            legend_vault_opened INTEGER DEFAULT 0,
+            vip_mystery_opened INTEGER DEFAULT 0
         )
     ''')
+
+    # Добавляем колонки для боксов если их нет
+    box_columns = [
+        'starter_pack_opened', 'gamer_case_opened', 'business_box_opened',
+        'champion_chest_opened', 'pro_gear_opened', 'legend_vault_opened', 'vip_mystery_opened'
+    ]
+    for column in box_columns:
+        try:
+            await conn.execute(f'ALTER TABLE user_achievement_stats ADD COLUMN {column} INTEGER DEFAULT 0')
+            logger.info(f"Added {column} column to user_achievement_stats table")
+        except:
+            pass  # Column already exists
 
     # Таблица батл пасса
     await conn.execute('''
@@ -1415,69 +1434,78 @@ async def open_box(user_id: int, box_type: str):
         box_config = {
             "starter_pack": {
                 "rewards": [
-                    ("⏱ Заработок ПК", 80, lambda: random.randint(1, 6)),  # 1-6 часов
-                    ("🖥 ПК", 18.5, lambda: 1),
-                    ("⚡ Премиум", 0.5, lambda: random.randint(1, 12)),
+                    ("⏱ Макс доход игрока", 90, lambda: random.randint(1, 6)),  # 90% шанс
+                    ("⏱ Заработок ПК", 9, lambda: random.randint(1, 6)),  # 9% шанс
+                    ("🖥 ПК", 0.9, lambda: 1),  # 0.9% шанс
+                    ("⚡ Премиум", 0.033, lambda: random.randint(1, 3)),  # 0.1%/3 шанс
+                    ("🤖 Спонсор клуба", 0.033, lambda: random.randint(1, 3)),
+                    ("🔧 Автоматизация", 0.034, lambda: random.randint(1, 3)),
                 ],
                 "name": "📦 STARTER PACK"
             },
             "gamer_case": {
                 "rewards": [
-                    ("⏱ Заработок ПК", 62, lambda: random.randint(3, 12)),  # 3-12 часов
-                    ("🖥 Игровой ПК", 31, lambda: 1),
-                    ("⚡ Премиум", 2, lambda: random.randint(1, 32)),
-                    ("🤖 Спонсор клуба", 2, lambda: random.randint(1, 32)),
-                    ("🔧 Автоматизация", 2, lambda: random.randint(1, 32)),
+                    ("⏱ Макс доход игрока", 80, lambda: random.randint(1, 12)),  # 80% шанс
+                    ("⏱ Заработок ПК", 19, lambda: random.randint(1, 12)),  # 19% шанс
+                    ("🖥 Игровой ПК", 0.7, lambda: 1),  # 0.7% шанс
+                    ("⚡ Премиум", 0.1, lambda: random.randint(1, 12)),  # 0.3%/3 шанс
+                    ("🤖 Спонсор клуба", 0.1, lambda: random.randint(1, 12)),
+                    ("🔧 Автоматизация", 0.1, lambda: random.randint(1, 12)),
                 ],
                 "name": "🎮 GAMER'S CASE"
             },
             "business_box": {
                 "rewards": [
-                    ("⏱ Заработок ПК", 62, lambda: random.randint(6, 18)),  # 6-18 часов
-                    ("🖥 Бизнес ПК", 31, lambda: random.randint(1, 2)),
-                    ("⚡ Премиум", 2, lambda: random.randint(1, 32)),
-                    ("🤖 Спонсор клуба", 2, lambda: random.randint(1, 32)),
-                    ("🔧 Автоматизация", 2, lambda: random.randint(1, 32)),
+                    ("⏱ Макс доход игрока", 70, lambda: random.randint(1, 24)),  # 70% шанс
+                    ("⏱ Заработок ПК", 25, lambda: random.randint(1, 24)),  # 25% шанс
+                    ("🖥 Бизнес ПК", 4.5, lambda: 1),  # 4.5% шанс
+                    ("⚡ Премиум", 0.167, lambda: random.randint(1, 24)),  # 0.5%/3 шанс
+                    ("🤖 Спонсор клуба", 0.167, lambda: random.randint(1, 24)),
+                    ("🔧 Автоматизация", 0.166, lambda: random.randint(1, 24)),
                 ],
                 "name": "💼 BUSINESS BOX"
             },
             "champion_chest": {
                 "rewards": [
-                    ("⏱ Заработок ПК", 60, lambda: random.randint(12, 24)),  # 12-24 часов
-                    ("🖥 Элитный ПК", 30, lambda: random.randint(1, 3)),
-                    ("⚡ Премиум", 3, lambda: random.randint(12, 64)),
-                    ("🤖 Спонсор клуба", 3, lambda: random.randint(12, 64)),
-                    ("🔧 Автоматизация", 3, lambda: random.randint(12, 64)),
+                    ("⏱ Макс доход игрока", 60, lambda: random.randint(1, 48)),  # 60% шанс
+                    ("⏱ Заработок ПК", 30, lambda: random.randint(1, 48)),  # 30% шанс
+                    ("🖥 Элитный ПК", 9.3, lambda: 1),  # 9.3% шанс
+                    ("⚡ Премиум", 0.233, lambda: random.randint(1, 48)),  # 0.7%/3 шанс
+                    ("🤖 Спонсор клуба", 0.233, lambda: random.randint(1, 48)),
+                    ("🔧 Автоматизация", 0.234, lambda: random.randint(1, 48)),
                 ],
                 "name": "🏆 CHAMPION CHEST"
             },
             "pro_gear": {
                 "rewards": [
-                    ("⏱ Заработок ПК", 50, lambda: random.randint(24, 48)),  # 24-48 часов
-                    ("🖥 Про-комплект ПК", 25, lambda: random.randint(2, 5)),
-                    ("⚡ Премиум", 8, lambda: random.randint(24, 128)),
-                    ("🤖 Спонсор клуба", 8, lambda: random.randint(24, 128)),
-                    ("🔧 Автоматизация", 8, lambda: random.randint(24, 128)),
+                    ("⏱ Макс доход игрока", 50, lambda: random.randint(1, 72)),  # 50% шанс
+                    ("⏱ Заработок ПК", 35, lambda: random.randint(1, 72)),  # 35% шанс
+                    ("🖥 Про-комплект ПК", 14, lambda: 1),  # 14% шанс
+                    ("⚡ Премиум", 0.333, lambda: random.randint(1, 72)),  # 1.0%/3 шанс
+                    ("🤖 Спонсор клуба", 0.333, lambda: random.randint(1, 72)),
+                    ("🔧 Автоматизация", 0.334, lambda: random.randint(1, 72)),
                 ],
-                "name": "🧳 PRO GEAR CASE"
+                "name": "🧳 PRO GEAR"
             },
             "legend_vault": {
                 "rewards": [
-                    ("⏱ Заработок ПК", 50, lambda: random.randint(48, 96)),  # 48-96 часов
-                    ("🖥 Легендарное оборудование", 25, lambda: random.randint(5, 10)),
-                    ("⚡ Премиум", 8, lambda: random.randint(48, 256)),
-                    ("🤖 Спонсор клуба", 8, lambda: random.randint(48, 256)),
-                    ("🔧 Автоматизация", 8, lambda: random.randint(48, 256)),
+                    ("⏱ Макс доход игрока", 40, lambda: random.randint(1, 96)),  # 40% шанс
+                    ("⏱ Заработок ПК", 40, lambda: random.randint(1, 96)),  # 40% шанс
+                    ("🖥 Легендарное оборудование", 18.5, lambda: 1),  # 18.5% шанс
+                    ("⚡ Премиум", 0.5, lambda: random.randint(1, 96)),  # 1.5%/3 шанс
+                    ("🤖 Спонсор клуба", 0.5, lambda: random.randint(1, 96)),
+                    ("🔧 Автоматизация", 0.5, lambda: random.randint(1, 96)),
                 ],
                 "name": "👑 LEGEND'S VAULT"
             },
             "vip_mystery": {
                 "rewards": [
-                    ("⏱ Заработок ПК", 40, lambda: random.randint(96, 168)),  # 96-168 часов
-                    ("🖥 VIP Ферма", 20, lambda: random.randint(10, 25)),
-                    ("⚡ Премиум", 13, lambda: random.randint(128, 512)),
-                    ("🤖 Спонсор клуба", 13, lambda: random.randint(128, 512)),
-                    ("🔧 Автоматизация", 13, lambda: random.randint(128, 512)),
+                    ("⏱ Макс доход игрока", 30, lambda: random.randint(1, 128)),  # 30% шанс
+                    ("⏱ Заработок ПК", 50, lambda: random.randint(1, 128)),  # 50% шанс
+                    ("🖥 VIP Ферма", 17, lambda: 1),  # 17% шанс
+                    ("⚡ Премиум", 1.0, lambda: random.randint(1, 128)),  # 3%/3 шанс
+                    ("🤖 Спонсор клуба", 1.0, lambda: random.randint(1, 128)),
+                    ("🔧 Автоматизация", 1.0, lambda: random.randint(1, 128)),
                 ],
                 "name": "🌟 VIP MYSTERY BOX"
             }
@@ -1616,6 +1644,26 @@ async def open_box(user_id: int, box_type: str):
                     ELSE datetime('now', '+' || ? || ' hours')
                 END WHERE userid = ?
             ''', (hours, hours, user_id))
+
+        # Отслеживаем открытие бокса для достижений
+        box_stat_map = {
+            "starter_pack": ("starter_pack_opened", "boxes_starter"),
+            "gamer_case": ("gamer_case_opened", "boxes_gamer"),
+            "business_box": ("business_box_opened", "boxes_business"),
+            "champion_chest": ("champion_chest_opened", "boxes_champion"),
+            "pro_gear": ("pro_gear_opened", "boxes_pro"),
+            "legend_vault": ("legend_vault_opened", "boxes_legend"),
+            "vip_mystery": ("vip_mystery_opened", "boxes_vip")
+        }
+
+        if box_type in box_stat_map:
+            stat_column, category = box_stat_map[box_type]
+            await ensure_user_achievement_stats(user_id)
+            await conn.execute(f'''
+            UPDATE user_achievement_stats SET {stat_column} = {stat_column} + 1
+            WHERE user_id = ?
+            ''', (user_id,))
+            await check_achievements(user_id, category)
 
         await conn.commit()
         return selected_reward
@@ -1762,6 +1810,22 @@ async def cmd_upgrade_room_free(message: Message):
     if new_room > max_room:
         await message.answer(
             f'❌ Вы достигли максимального уровня комнаты для вашей экспансии!\n\n'
+            f'Текущий уровень: {current_room}\n'
+            f'Максимум: {max_room}\n\n'
+            f'Для дальнейшего роста выполните экспансию: /expansion'
+        )
+        return
+    
+    # Бесплатно повышаем уровень комнаты
+    await execute_update(
+        'UPDATE stats SET room = ? WHERE userid = ?',
+        (new_room, message.from_user.id)
+    )
+    
+    # Получаем название комнаты
+    room_name = ROOM_NAMES.get(new_room, f"Комната уровня {new_room}")
+    
+    await message.answer
             f'Текущий уровень: {current_room}\n'
             f'Максимум: {max_room}\n\n'
             f'Для дальнейшего роста выполните экспансию: /expansion'
@@ -8137,7 +8201,8 @@ async def cmd_achievements(message: Message):
          InlineKeyboardButton(text="🛍 Инвестор", callback_data="ach_buy")],
         [InlineKeyboardButton(text="💸 Трейдер", callback_data="ach_sell"),
          InlineKeyboardButton(text="🖥 Экспансия", callback_data="ach_expansion")],
-        [InlineKeyboardButton(text="✨ Репутация", callback_data="ach_reputation")]
+        [InlineKeyboardButton(text="✨ Репутация", callback_data="ach_reputation")],
+        [InlineKeyboardButton(text="🎁 Боксы", callback_data="ach_boxes")]
     ])
 
     text = (
@@ -8162,13 +8227,35 @@ async def cb_achievement_category(callback: CallbackQuery):
              InlineKeyboardButton(text="🛍 Инвестор", callback_data="ach_buy")],
             [InlineKeyboardButton(text="💸 Трейдер", callback_data="ach_sell"),
              InlineKeyboardButton(text="🖥 Экспансия", callback_data="ach_expansion")],
-            [InlineKeyboardButton(text="✨ Репутация", callback_data="ach_reputation")]
+            [InlineKeyboardButton(text="✨ Репутация", callback_data="ach_reputation")],
+            [InlineKeyboardButton(text="🎁 Боксы", callback_data="ach_boxes")]
         ])
         text = (
             "🏆 <b>ЗАЛ СЛАВЫ ПК КЛУБА</b>\n\n"
             "Здесь отмечаются лучшие владельцы клубов!\n"
             "Выполняй задания и получай эксклюзивные кейсы с наградами.\n\n"
             "<i>Выбери категорию:</i>"
+        )
+        await callback.message.edit_text(text, reply_markup=builder, parse_mode="HTML")
+        await callback.answer()
+        return
+
+    if category == "boxes":
+        # Подменю боксов
+        builder = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📦 STARTER PACK", callback_data="ach_boxes_starter")],
+            [InlineKeyboardButton(text="🎮 GAMER'S CASE", callback_data="ach_boxes_gamer")],
+            [InlineKeyboardButton(text="💼 BUSINESS BOX", callback_data="ach_boxes_business")],
+            [InlineKeyboardButton(text="🏆 CHAMPION CHEST", callback_data="ach_boxes_champion")],
+            [InlineKeyboardButton(text="🧳 PRO GEAR", callback_data="ach_boxes_pro")],
+            [InlineKeyboardButton(text="👑 LEGEND'S VAULT", callback_data="ach_boxes_legend")],
+            [InlineKeyboardButton(text="🌟 VIP MYSTERY BOX", callback_data="ach_boxes_vip")],
+            [InlineKeyboardButton(text="« Назад", callback_data="ach_back")]
+        ])
+        text = (
+            "🎁 <b>ДОСТИЖЕНИЯ ЗА БОКСЫ</b>\n\n"
+            "Открывай боксы и получай награды за достижения!\n\n"
+            "<i>Выбери тип бокса:</i>"
         )
         await callback.message.edit_text(text, reply_markup=builder, parse_mode="HTML")
         await callback.answer()
@@ -8205,7 +8292,14 @@ async def cb_achievement_category(callback: CallbackQuery):
         'buy': '🛍 ИНВЕСТОР',
         'sell': '💸 ТРЕЙДЕР',
         'expansion': '🖥 ЭКСПАНСИЯ',
-        'reputation': '✨ РЕПУТАЦИЯ'
+        'reputation': '✨ РЕПУТАЦИЯ',
+        'boxes_starter': '📦 STARTER PACK',
+        'boxes_gamer': '🎮 GAMER\'S CASE',
+        'boxes_business': '💼 BUSINESS BOX',
+        'boxes_champion': '🏆 CHAMPION CHEST',
+        'boxes_pro': '🧳 PRO GEAR',
+        'boxes_legend': '👑 LEGEND\'S VAULT',
+        'boxes_vip': '🌟 VIP MYSTERY BOX'
     }
 
     progress = min(100, (achievement['current_value'] / achievement['target_value']) * 100) if achievement['target_value'] > 0 else 0
@@ -10474,22 +10568,4 @@ async def main():
     asyncio.create_task(start_social_bonus_checker())
     asyncio.create_task(schedule_boosters_processing())
     
-    # ЗАПУСКАЕМ ПЛАНИРОВЩИК ИТОГОВ НЕДЕЛИ
-    asyncio.create_task(schedule_weekly_results())
-    
-    # Start polling
-    await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot, polling_timeout=20)
-    
-if __name__ == '__main__':
-    try:
-        print("Starting PC Club Bot...")
-        print("Weekly results will be posted every Sunday at 18:00 Moscow time")
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print('Bot stopped by user')
-    except Exception as e:
-        print(f'Error: {e}')
-    finally:
-        # Close database connection
-        asyncio.run(Database.close())
+    # ЗАПУСКАЕМ ПЛАНИРОВ
