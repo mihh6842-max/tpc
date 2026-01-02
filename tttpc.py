@@ -632,7 +632,19 @@ async def update_database_schema():
         # Добавляем колонку если её нет
         await conn.execute('ALTER TABLE stats ADD COLUMN expansion_level INTEGER DEFAULT 0')
         logger.info("Added expansion_level column to stats table")
-    
+
+    # Проверяем и добавляем колонки для боксов
+    box_columns = [
+        'starter_pack_opened', 'gamer_case_opened', 'business_box_opened',
+        'champion_chest_opened', 'pro_gear_opened', 'legend_vault_opened', 'vip_mystery_opened'
+    ]
+    for column in box_columns:
+        try:
+            await conn.execute(f'SELECT {column} FROM user_achievement_stats LIMIT 1')
+        except Exception:
+            await conn.execute(f'ALTER TABLE user_achievement_stats ADD COLUMN {column} INTEGER DEFAULT 0')
+            logger.info(f"Added {column} column to user_achievement_stats table")
+
     await conn.commit()
 
 
@@ -882,18 +894,6 @@ async def init_db():
             vip_mystery_opened INTEGER DEFAULT 0
         )
     ''')
-
-    # Добавляем колонки для боксов если их нет
-    box_columns = [
-        'starter_pack_opened', 'gamer_case_opened', 'business_box_opened',
-        'champion_chest_opened', 'pro_gear_opened', 'legend_vault_opened', 'vip_mystery_opened'
-    ]
-    for column in box_columns:
-        try:
-            await conn.execute(f'ALTER TABLE user_achievement_stats ADD COLUMN {column} INTEGER DEFAULT 0')
-            logger.info(f"Added {column} column to user_achievement_stats table")
-        except:
-            pass  # Column already exists
 
     # Таблица батл пасса
     await conn.execute('''
@@ -1645,27 +1645,21 @@ async def open_box(user_id: int, box_type: str):
                 END WHERE userid = ?
             ''', (hours, hours, user_id))
 
+        await conn.commit()
+
         # Отслеживаем открытие бокса для достижений
         box_stat_map = {
-            "starter_pack": ("starter_pack_opened", "boxes_starter"),
-            "gamer_case": ("gamer_case_opened", "boxes_gamer"),
-            "business_box": ("business_box_opened", "boxes_business"),
-            "champion_chest": ("champion_chest_opened", "boxes_champion"),
-            "pro_gear": ("pro_gear_opened", "boxes_pro"),
-            "legend_vault": ("legend_vault_opened", "boxes_legend"),
-            "vip_mystery": ("vip_mystery_opened", "boxes_vip")
+            "starter_pack": "boxes_starter",
+            "gamer_case": "boxes_gamer",
+            "business_box": "boxes_business",
+            "champion_chest": "boxes_champion",
+            "pro_gear": "boxes_pro",
+            "legend_vault": "boxes_legend",
+            "vip_mystery": "boxes_vip"
         }
 
         if box_type in box_stat_map:
-            stat_column, category = box_stat_map[box_type]
-            await ensure_user_achievement_stats(user_id)
-            await conn.execute(f'''
-            UPDATE user_achievement_stats SET {stat_column} = {stat_column} + 1
-            WHERE user_id = ?
-            ''', (user_id,))
-            await check_achievements(user_id, category)
-
-        await conn.commit()
+            await update_user_achievement_stat(user_id, box_stat_map[box_type], 1)
         return selected_reward
     except Exception as e:
         logging.error(f"Error opening box: {e}")
@@ -1810,22 +1804,6 @@ async def cmd_upgrade_room_free(message: Message):
     if new_room > max_room:
         await message.answer(
             f'❌ Вы достигли максимального уровня комнаты для вашей экспансии!\n\n'
-            f'Текущий уровень: {current_room}\n'
-            f'Максимум: {max_room}\n\n'
-            f'Для дальнейшего роста выполните экспансию: /expansion'
-        )
-        return
-    
-    # Бесплатно повышаем уровень комнаты
-    await execute_update(
-        'UPDATE stats SET room = ? WHERE userid = ?',
-        (new_room, message.from_user.id)
-    )
-    
-    # Получаем название комнаты
-    room_name = ROOM_NAMES.get(new_room, f"Комната уровня {new_room}")
-    
-    await message.answer
             f'Текущий уровень: {current_room}\n'
             f'Максимум: {max_room}\n\n'
             f'Для дальнейшего роста выполните экспансию: /expansion'
@@ -10568,4 +10546,22 @@ async def main():
     asyncio.create_task(start_social_bonus_checker())
     asyncio.create_task(schedule_boosters_processing())
     
-    # ЗАПУСКАЕМ ПЛАНИРОВ
+    # ЗАПУСКАЕМ ПЛАНИРОВЩИК ИТОГОВ НЕДЕЛИ
+    asyncio.create_task(schedule_weekly_results())
+    
+    # Start polling
+    await bot.delete_webhook(drop_pending_updates=True)
+    await dp.start_polling(bot, polling_timeout=20)
+    
+if __name__ == '__main__':
+    try:
+        print("Starting PC Club Bot...")
+        print("Weekly results will be posted every Sunday at 18:00 Moscow time")
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print('Bot stopped by user')
+    except Exception as e:
+        print(f'Error: {e}')
+    finally:
+        # Close database connection
+        asyncio.run(Database.close())
