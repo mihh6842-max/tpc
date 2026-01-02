@@ -1058,6 +1058,50 @@ async def initialize_achievements():
         ("🔥 Знаменитый", "Достичь 7 уровня репутации", "reputation", 7, "champion_chest", 2),
         ("💎 Икона", "Достичь 9 уровня репутации", "reputation", 9, "pro_gear", 1),
         ("👑 Легенда", "Достичь 10 уровня репутации", "reputation", 10, "legend_vault", 1),
+
+        # 🎁 БОКСЫ - Достижения за открытие боксов
+
+        # 📦 STARTER PACK
+        ("🎁 Первые шаги", "Открыть 10 📦 STARTER PACK", "boxes_starter", 10, "starter_pack", 1),
+        ("🎁 Коллекционер стартеров", "Открыть 25 📦 STARTER PACK", "boxes_starter", 25, "starter_pack", 5),
+        ("🎁 Мастер стартов", "Открыть 50 📦 STARTER PACK", "boxes_starter", 50, "gamer_case", 3),
+        ("🎁 Легенда стартеров", "Открыть 100 📦 STARTER PACK", "boxes_starter", 100, "business_box", 1),
+
+        # 🎮 GAMER'S CASE
+        ("🎮 Начинающий геймер", "Открыть 10 🎮 GAMER'S CASE", "boxes_gamer", 10, "gamer_case", 1),
+        ("🎮 Опытный геймер", "Открыть 25 🎮 GAMER'S CASE", "boxes_gamer", 25, "gamer_case", 5),
+        ("🎮 Про-геймер", "Открыть 50 🎮 GAMER'S CASE", "boxes_gamer", 50, "business_box", 3),
+        ("🎮 Геймер-легенда", "Открыть 100 🎮 GAMER'S CASE", "boxes_gamer", 100, "champion_chest", 1),
+
+        # 💼 BUSINESS BOX
+        ("💼 Начинающий бизнесмен", "Открыть 10 💼 BUSINESS BOX", "boxes_business", 10, "business_box", 1),
+        ("💼 Деловой партнер", "Открыть 25 💼 BUSINESS BOX", "boxes_business", 25, "business_box", 5),
+        ("💼 Бизнес-магнат", "Открыть 50 💼 BUSINESS BOX", "boxes_business", 50, "champion_chest", 3),
+        ("💼 Король бизнеса", "Открыть 100 💼 BUSINESS BOX", "boxes_business", 100, "pro_gear", 1),
+
+        # 🏆 CHAMPION CHEST
+        ("🏆 Начинающий чемпион", "Открыть 10 🏆 CHAMPION CHEST", "boxes_champion", 10, "champion_chest", 1),
+        ("🏆 Чемпион-коллекционер", "Открыть 25 🏆 CHAMPION CHEST", "boxes_champion", 25, "champion_chest", 5),
+        ("🏆 Великий чемпион", "Открыть 50 🏆 CHAMPION CHEST", "boxes_champion", 50, "pro_gear", 3),
+        ("🏆 Легендарный чемпион", "Открыть 100 🏆 CHAMPION CHEST", "boxes_champion", 100, "legend_vault", 5),
+
+        # 🧳 PRO GEAR
+        ("🧳 Начинающий профи", "Открыть 10 🧳 PRO GEAR", "boxes_pro", 10, "pro_gear", 1),
+        ("🧳 Опытный профи", "Открыть 25 🧳 PRO GEAR", "boxes_pro", 25, "pro_gear", 5),
+        ("🧳 Мастер профессионал", "Открыть 50 🧳 PRO GEAR", "boxes_pro", 50, "legend_vault", 1),
+        ("🧳 Легенда профи", "Открыть 100 🧳 PRO GEAR", "boxes_pro", 100, "legend_vault", 3),
+
+        # 👑 LEGEND'S VAULT
+        ("👑 Начинающая легенда", "Открыть 10 👑 LEGEND'S VAULT", "boxes_legend", 10, "legend_vault", 1),
+        ("👑 Легенда-коллекционер", "Открыть 25 👑 LEGEND'S VAULT", "boxes_legend", 25, "legend_vault", 5),
+        ("👑 Великая легенда", "Открыть 50 👑 LEGEND'S VAULT", "boxes_legend", 50, "vip_mystery", 1),
+        ("👑 Бессмертная легенда", "Открыть 100 👑 LEGEND'S VAULT", "boxes_legend", 100, "vip_mystery", 3),
+
+        # 🌟 VIP MYSTERY BOX
+        ("🌟 VIP-новичок", "Открыть 10 🌟 VIP MYSTERY BOX", "boxes_vip", 10, "vip_mystery", 1),
+        ("🌟 VIP-коллекционер", "Открыть 25 🌟 VIP MYSTERY BOX", "boxes_vip", 25, "vip_mystery", 3),
+        ("🌟 VIP-магнат", "Открыть 50 🌟 VIP MYSTERY BOX", "boxes_vip", 50, "vip_mystery", 5),
+        ("🌟 VIP-император", "Открыть 100 🌟 VIP MYSTERY BOX", "boxes_vip", 100, "vip_mystery", 10),
     ]
 
     try:
@@ -1065,14 +1109,34 @@ async def initialize_achievements():
         cursor = await conn.execute('SELECT COUNT(*) FROM achievements')
         count = (await cursor.fetchone())[0]
 
-        if count == 0:
-            for achievement in achievements_data:
+        # Добавляем только новые достижения (по category)
+        existing_categories = set()
+        cursor = await conn.execute('SELECT DISTINCT category FROM achievements')
+        async for row in cursor:
+            existing_categories.add(row[0])
+
+        added = 0
+        for achievement in achievements_data:
+            category = achievement[2]  # category is 3rd element
+            # Проверяем есть ли уже достижения этой категории
+            cursor = await conn.execute(
+                'SELECT COUNT(*) FROM achievements WHERE category = ? AND target_value = ?',
+                (category, achievement[3])
+            )
+            exists = (await cursor.fetchone())[0] > 0
+
+            if not exists:
                 await conn.execute('''
                 INSERT INTO achievements (name, description, category, target_value, reward_type, reward_value)
                 VALUES (?, ?, ?, ?, ?, ?)
                 ''', achievement)
+                added += 1
+
+        if added > 0:
             await conn.commit()
-            logging.info("Achievements initialized successfully")
+            logging.info(f"Added {added} new achievements")
+        elif count == 0:
+            logging.info("No achievements to add")
     except Exception as e:
         logging.error(f"Error initializing achievements: {e}")
 
@@ -1152,7 +1216,14 @@ async def update_user_achievement_stat(user_id: int, stat_type: str, value: int 
         'buy': 'total_buy_count',
         'sell': 'total_sell_count',
         'expansion': 'max_expansion_level',
-        'reputation': 'max_reputation_level'
+        'reputation': 'max_reputation_level',
+        'boxes_starter': 'starter_pack_opened',
+        'boxes_gamer': 'gamer_case_opened',
+        'boxes_business': 'business_box_opened',
+        'boxes_champion': 'champion_chest_opened',
+        'boxes_pro': 'pro_gear_opened',
+        'boxes_legend': 'legend_vault_opened',
+        'boxes_vip': 'vip_mystery_opened'
     }
 
     column = stat_mapping.get(stat_type)
@@ -1189,7 +1260,14 @@ async def check_achievements(user_id: int, category: str):
         'buy': 'total_buy_count',
         'sell': 'total_sell_count',
         'expansion': 'max_expansion_level',
-        'reputation': 'max_reputation_level'
+        'reputation': 'max_reputation_level',
+        'boxes_starter': 'starter_pack_opened',
+        'boxes_gamer': 'gamer_case_opened',
+        'boxes_business': 'business_box_opened',
+        'boxes_champion': 'champion_chest_opened',
+        'boxes_pro': 'pro_gear_opened',
+        'boxes_legend': 'legend_vault_opened',
+        'boxes_vip': 'vip_mystery_opened'
     }
 
     column = stat_mapping.get(category)
